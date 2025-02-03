@@ -31,4 +31,4 @@ Get-Disk |
                 "Free Space(GB)"         = $freeSpaceGB
             }
         }
-    }
+    } | Export-Csv C:\TEMP\mydisks.csv -NoTypeInformation
