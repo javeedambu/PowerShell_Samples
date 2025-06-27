@@ -23,4 +23,4 @@ Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.DriveType -eq 3 } | 
         FreeSpace_GB   = [math]::Round($_.FreeSpace / 1GB, 2)
         DeviceID       = $_.DeviceID
     }
-} | Sort-Object DiskNumber | Format-Table -AutoSize
+} | Sort-Object DiskNumber | Export-Csv -Path "C:\temp\$(hostname)_DiskInfo.csv" -NoTypeInformation
