@@ -1,34 +1,26 @@
-Get-Disk | 
-    Select-Object Number, @{Name="Disk ID";Expression={$_.UniqueId}}, FriendlyName, OperationalStatus, @{Name="Size(GB)";Expression={[math]::round($_.Size / 1GB, 2)}}, Model, SerialNumber |
-    ForEach-Object {
-        $disk = $_
-        $partitions = Get-Partition -DiskNumber $disk.Number
-        $partitions | ForEach-Object {
-            $partition = $_
-            $volume = Get-Volume -DriveLetter $partition.DriveLetter -ErrorAction SilentlyContinue
+# Build a map of Volume DeviceID to DiskNumber
+$partitionMap = @{}
 
-            # If the partition has a volume, calculate used and free space
-            if ($volume) {
-                $usedSpaceGB = [math]::round(($volume.Size - $volume.FreeSpace) / 1GB, 2)
-                $freeSpaceGB = [math]::round($volume.FreeSpace / 1GB, 2)
-            } else {
-                # If no volume, set both used and free space to null or zero
-                $usedSpaceGB = 0
-                $freeSpaceGB = 0
-            }
+Get-Partition | Sort-Object DiskNumber | ForEach-Object {
+    $partition = $_
+    $volume = Get-Volume -Partition $partition -ErrorAction SilentlyContinue
+    if ($volume) {
+        $partitionMap[$volume.UniqueId] = $partition.DiskNumber
+    }
+}
 
-            [PSCustomObject]@{
-                "Disk Number"            = $disk.Number
-                "Disk ID"                = $disk.'Disk ID'
-                "Disk FriendlyName"      = $disk.FriendlyName
-                "Disk Model"             = $disk.Model
-                "Disk Size(GB)"          = $disk.'Size(GB)'
-                "Disk Serial Number"     = $disk.SerialNumber
-                "Partition Number"       = $partition.PartitionNumber
-                "Partition DriveLetter"  = $partition.DriveLetter
-                "Partition Size(GB)"     = [math]::round($partition.Size / 1GB, 2)
-                "Used Space(GB)"         = $usedSpaceGB
-                "Free Space(GB)"         = $freeSpaceGB
-            }
-        }
-    } | Export-Csv C:\TEMP\mydisks.csv -NoTypeInformation
+# Now get volumes and join DiskNumber
+Get-CimInstance -ClassName Win32_Volume | Where-Object { $_.DriveType -eq 3 } | ForEach-Object {
+    $diskNumber = $partitionMap[$_.DeviceID]  # Use DeviceID as key
+    [PSCustomObject]@{
+        DiskNumber     = $diskNumber
+        DriveLetter    = $_.DriveLetter
+        MountPath      = $_.Name
+        Label          = $_.Label
+        FileSystem     = $_.FileSystem
+        BlockSize_KB   = $_.BlockSize / 1KB
+        Capacity_GB    = [math]::Round($_.Capacity / 1GB, 2)
+        FreeSpace_GB   = [math]::Round($_.FreeSpace / 1GB, 2)
+        DeviceID       = $_.DeviceID
+    }
+} | Sort-Object DiskNumber | Format-Table -AutoSize
